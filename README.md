@@ -21,7 +21,6 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1          # macOS/Linux: source .venv/bin/activate
 python -m pip install -r requirements.txt
-python manage.py makemigrations
 python manage.py migrate
 python manage.py runserver
 ```
@@ -102,8 +101,27 @@ frontend/src/
 
 ## Evidencias
 
-- Capturas: carpeta `capturas/` (formulario, historial de comentarios, alertas y dashboard).
-- Video de demostración (3 a 5 minutos): ENLACE-DEL-VIDEO
+### Capturas
+
+**Formulario** (responsable, ubicación y fecha límite)
+
+![Formulario](capturas/01-formulario.png)
+
+**Historial de comentarios**
+
+![Historial de comentarios](capturas/02-historial-comentarios.png)
+
+**Alertas de vencimiento**
+
+![Alertas de vencimiento](capturas/03-alertas.png)
+
+**Dashboard**
+
+![Dashboard](capturas/04-dashboard.png)
+
+### Video de demostración (3 a 5 minutos)
+
+ENLACE-DEL-VIDEO
 
 ## Extras incluidos
 
