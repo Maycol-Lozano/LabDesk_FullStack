@@ -105,19 +105,19 @@ frontend/src/
 
 **Formulario** (responsable, ubicación y fecha límite)
 
-![Formulario](capturas/01-formulario.png)
+![Formulario](capturas/d.png)
 
 **Historial de comentarios**
 
-![Historial de comentarios](capturas/02-historial-comentarios.png)
+![Historial de comentarios](capturas/c.png)
 
 **Alertas de vencimiento**
 
-![Alertas de vencimiento](capturas/03-alertas.png)
+![Alertas de vencimiento](capturas/b.png)
 
 **Dashboard**
 
-![Dashboard](capturas/04-dashboard.png)
+![Dashboard](capturas/a.png)
 
 ### Video de demostración (3 a 5 minutos)
 
