@@ -1,58 +1,77 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { api } from './api'
+import { ESTADOS, PRIORIDADES, aInputLocal, generarCSV } from './utils'
+import Dashboard from './components/Dashboard'
+import FormularioIncidencia from './components/FormularioIncidencia'
+import TarjetaIncidencia from './components/TarjetaIncidencia'
+import DetalleIncidencia from './components/DetalleIncidencia'
 
-const API = 'http://127.0.0.1:8000/api/incidencias/'
 const vacio = {
-  titulo: '', descripcion: '', categoria: 'hardware',
-  prioridad: 'media', estado: 'pendiente', aula: ''
+  titulo: '', descripcion: '', categoria: 'hardware', prioridad: 'media',
+  estado: 'pendiente', aula: '', responsable: '', ubicacion: '', fecha_limite: '',
 }
 
 export default function App() {
-  const [datos, setDatos] = useState([])
+  const [incidencias, setIncidencias] = useState([])
+  const [stats, setStats] = useState(null)
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState('')
+
   const [form, setForm] = useState(vacio)
   const [editando, setEditando] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+  const [errorForm, setErrorForm] = useState('')
+
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [filtroPrioridad, setFiltroPrioridad] = useState('todas')
+  const [filtroAlerta, setFiltroAlerta] = useState('todas')
   const [orden, setOrden] = useState('recientes')
-  const [error, setError] = useState('')
 
-  async function cargar() {
+  const [detalleId, setDetalleId] = useState(null)
+
+  // Recarga la lista y los indicadores desde Django.
+  const cargar = useCallback(async () => {
     try {
-      const respuesta = await fetch(API)
-      if (!respuesta.ok) throw new Error('No se pudo cargar la API')
-      setDatos(await respuesta.json())
+      const [lista, indicadores] = await Promise.all([api.listar(), api.estadisticas()])
+      setIncidencias(lista)
+      setStats(indicadores)
       setError('')
-    } catch (e) { setError(e.message) }
-  }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setCargando(false)
+    }
+  }, [])
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => {
+    cargar()
+  }, [cargar])
 
-  function cambiar(e) {
-    setForm({ ...form, [e.target.name]: e.target.value })
-  }
-
-  async function guardar(e) {
-    e.preventDefault()
+  async function guardar() {
+    setGuardando(true)
+    setErrorForm('')
+    const datos = { ...form, fecha_limite: form.fecha_limite || null }
     try {
-      const url = editando === null ? API : `${API}${editando}/`
-      const metodo = editando === null ? 'POST' : 'PUT'
-      const respuesta = await fetch(url, {
-        method: metodo,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      })
-      if (!respuesta.ok) throw new Error('Verifica los campos enviados')
+      if (editando === null) await api.crear(datos)
+      else await api.actualizar(editando, datos)
       cancelar()
       await cargar()
-    } catch (e) { setError(e.message) }
+    } catch (e) {
+      setErrorForm(e.message)
+    } finally {
+      setGuardando(false)
+    }
   }
 
   function editar(item) {
     setEditando(item.id)
+    setErrorForm('')
     setForm({
-      titulo: item.titulo, descripcion: item.descripcion,
-      categoria: item.categoria, prioridad: item.prioridad,
-      estado: item.estado, aula: item.aula
+      titulo: item.titulo, descripcion: item.descripcion, categoria: item.categoria,
+      prioridad: item.prioridad, estado: item.estado, aula: item.aula || '',
+      responsable: item.responsable || '', ubicacion: item.ubicacion || '',
+      fecha_limite: aInputLocal(item.fecha_limite),
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -60,173 +79,145 @@ export default function App() {
   function cancelar() {
     setEditando(null)
     setForm({ ...vacio })
+    setErrorForm('')
   }
 
-  async function actualizarEstado(id, estado) {
+  async function cambiarEstado(id, estado) {
     try {
-      const respuesta = await fetch(`${API}${id}/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado })
-      })
-      if (!respuesta.ok) throw new Error('No se pudo cambiar el estado')
+      await api.cambiarEstado(id, estado)
       await cargar()
-    } catch (e) { setError(e.message) }
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   async function eliminar(id) {
-    if (!window.confirm('¿Eliminar esta incidencia?')) return
+    if (!window.confirm('¿Eliminar esta incidencia y todos sus comentarios?')) return
     try {
-      const respuesta = await fetch(`${API}${id}/`, { method: 'DELETE' })
-      if (!respuesta.ok) throw new Error('No se pudo eliminar')
+      await api.eliminar(id)
+      if (editando === id) cancelar()
+      if (detalleId === id) setDetalleId(null)
       await cargar()
-    } catch (e) { setError(e.message) }
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
-  const filtrados = datos.filter(item => {
-  const texto = `${item.titulo} ${item.descripcion}`.toLowerCase()
-  return texto.includes(busqueda.toLowerCase()) &&
-    (filtroEstado === 'todos' || item.estado === filtroEstado) &&
-    (filtroPrioridad === 'todas' || item.prioridad === filtroPrioridad)
-}).sort((a, b) => orden === 'recientes'
-  ? new Date(b.creado_en) - new Date(a.creado_en)
-  : new Date(a.creado_en) - new Date(b.creado_en))
-  
+  const filtradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    const lista = incidencias.filter((i) => {
+      const texto = `${i.titulo} ${i.descripcion} ${i.responsable} ${i.ubicacion}`.toLowerCase()
+      return (
+        texto.includes(q) &&
+        (filtroEstado === 'todos' || i.estado === filtroEstado) &&
+        (filtroPrioridad === 'todas' || i.prioridad === filtroPrioridad) &&
+        (filtroAlerta === 'todas' || i.alerta === filtroAlerta)
+      )
+    })
+    const fecha = (i) => new Date(i.creado_en).getTime()
+    const limite = (i) => (i.fecha_limite ? new Date(i.fecha_limite).getTime() : Infinity)
+    return [...lista].sort((a, b) => {
+      if (orden === 'antiguas') return fecha(a) - fecha(b)
+      if (orden === 'vence') return limite(a) - limite(b)
+      return fecha(b) - fecha(a)
+    })
+  }, [incidencias, busqueda, filtroEstado, filtroPrioridad, filtroAlerta, orden])
+
   function exportarCSV() {
-  const encabezados = ['ID', 'Título', 'Descripción', 'Categoría', 'Prioridad', 'Estado', 'Aula', 'Creado en']
-  
-  const filas = filtrados.map(item => [
-    item.id,
-    `"${(item.titulo || '').replace(/"/g, '""')}"`,
-    `"${(item.descripcion || '').replace(/"/g, '""')}"`,
-    item.categoria,
-    item.prioridad,
-    item.estado,
-    `"${(item.aula || '').replace(/"/g, '""')}"`,
-    item.creado_en
-  ].join(';')) // <-- Punto y coma para que Excel en español separe las columnas
+    const url = URL.createObjectURL(new Blob([generarCSV(filtradas)], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'incidencias.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
-  // '\uFEFF' agrega el BOM de UTF-8 para que Excel respete tildes y la "ñ"
-  const contenidoCSV = '\uFEFF' + [encabezados.join(';'), ...filas].join('\n')
-  
-  const blob = new Blob([contenidoCSV], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const enlace = document.createElement('a')
-  enlace.href = url
-  enlace.download = 'incidencias_labdesk.csv'
-  enlace.click()
-  URL.revokeObjectURL(url)
-}
-
-  const pendientes = datos.filter(x => x.estado === 'pendiente').length
-  const resueltos = datos.filter(x => x.estado === 'resuelto').length
-  const proceso = datos.filter(x => x.estado === 'en_proceso').length
-  const altas = datos.filter(x => x.prioridad === 'alta').length
+  const detalle = incidencias.find((i) => i.id === detalleId)
 
   return (
     <main className="contenedor">
       <header className="encabezado">
-        <div><span className="eyebrow">PROYECTO FULL STACK</span>
-          <h1>LabDesk</h1><p>Gestión de incidencias del laboratorio</p>
+        <div>
+          <span className="eyebrow">PROYECTO FULL STACK</span>
+          <h1>LabDesk 2.0</h1>
+          <p>Seguimiento de incidencias del laboratorio</p>
         </div>
         <span className="api">Django API + React</span>
       </header>
 
-      <section className="estadisticas">
-        <div className="kpi"><strong>{datos.length}</strong><span>Total</span></div>
-        <div className="kpi"><strong>{pendientes}</strong><span>Pendientes</span></div>
-        <div className="kpi"><strong>{proceso}</strong><span>En proceso</span></div>
-        <div className="kpi"><strong>{resueltos}</strong><span>Resueltas</span></div>
-        <div className="kpi"><strong>{altas}</strong><span>Prioridad alta</span></div>
-      </section>
+      {error && (
+        <p className="error" role="alert">
+          {error} <button onClick={cargar}>Reintentar</button>
+        </p>
+      )}
 
-      {error && <p className="error">Error: {error}</p>}
+      <Dashboard stats={stats} cargando={cargando} />
 
       <div className="columnas">
-        <section className="panel">
-          <h2>{editando === null ? 'Nueva incidencia' : 'Editar incidencia'}</h2>
-          <form onSubmit={guardar}>
-            <label>Título<input required maxLength="120" name="titulo"
-              value={form.titulo} onChange={cambiar} placeholder="PC no enciende" /></label>
-            <label>Descripción<textarea required name="descripcion" rows="4"
-              value={form.descripcion} onChange={cambiar}
-              placeholder="Describe el problema..." /></label>
-            <label>Categoría<select name="categoria" value={form.categoria} onChange={cambiar}>
-              <option value="hardware">Hardware</option>
-              <option value="software">Software</option>
-              <option value="red">Red / Internet</option>
-            </select></label>
-            <label>Prioridad<select name="prioridad" value={form.prioridad} onChange={cambiar}>
-              <option value="baja">Baja</option>
-              <option value="media">Media</option>
-              <option value="alta">Alta</option>
-            </select></label>
-            <label>Estado<select name="estado" value={form.estado} onChange={cambiar}>
-              <option value="pendiente">Pendiente</option>
-              <option value="en_proceso">En proceso</option>
-              <option value="resuelto">Resuelto</option>
-            </select></label>
-             
-             <label>Aula<input name="aula" maxLength="40"
-             value={form.aula} onChange={cambiar} placeholder="Aula 2" /></label>
-
-            <button className="principal" type="submit">
-              {editando === null ? 'Registrar' : 'Guardar cambios'}
-            </button>
-            {editando !== null && <button type="button" onClick={cancelar}>
-              Cancelar edición</button>}
-          </form>
-        </section>
+        <FormularioIncidencia
+          form={form}
+          setForm={setForm}
+          editando={editando}
+          guardando={guardando}
+          errorServidor={errorForm}
+          onGuardar={guardar}
+          onCancelar={cancelar}
+        />
 
         <section className="panel">
-          <div className="cabecera-lista"><h2>Incidencias</h2>
-            <span>{filtrados.length} mostradas</span>
-            <button onClick={exportarCSV}>Exportar CSV</button></div>
+          <div className="cabecera-lista">
+            <h2>Incidencias</h2>
+            <span>{filtradas.length} de {incidencias.length} mostradas</span>
+            <button onClick={exportarCSV} disabled={filtradas.length === 0}>Exportar CSV</button>
+          </div>
+
           <div className="filtros">
-            <input placeholder="Buscar por título o descripción..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-            <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+            <input placeholder="Buscar por título, descripción, responsable…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} aria-label="Filtrar por estado">
               <option value="todos">Todos los estados</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="en_proceso">En proceso</option>
-              <option value="resuelto">Resuelto</option>
+              {Object.entries(ESTADOS).map(([v, t]) => <option key={v} value={v}>{t}</option>)}
             </select>
-            <select value={filtroPrioridad} onChange={e => setFiltroPrioridad(e.target.value)}>
+            <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)} aria-label="Filtrar por prioridad">
               <option value="todas">Todas las prioridades</option>
-              <option value="baja">Baja</option>
-              <option value="media">Media</option>
-              <option value="alta">Alta</option>
+              {Object.entries(PRIORIDADES).map(([v, t]) => <option key={v} value={v}>{t}</option>)}
             </select>
-            <select value={orden} onChange={e => setOrden(e.target.value)}>
+            <select value={filtroAlerta} onChange={(e) => setFiltroAlerta(e.target.value)} aria-label="Filtrar por alerta">
+              <option value="todas">Todas las alertas</option>
+              <option value="vencida">Vencidas</option>
+              <option value="proxima">Próximas a vencer</option>
+            </select>
+            <select value={orden} onChange={(e) => setOrden(e.target.value)} aria-label="Ordenar">
               <option value="recientes">Más recientes primero</option>
               <option value="antiguas">Más antiguas primero</option>
+              <option value="vence">Por fecha límite</option>
             </select>
           </div>
+
           <div className="lista">
-            {filtrados.length === 0 && <p className="sin-datos">No hay incidencias.</p>}
-            {filtrados.map(item => (
-              <article className="incidencia" key={item.id}>
-                <div className="item-top"><h3>{item.titulo}</h3>
-                  <span className={`prioridad ${item.prioridad}`}>{item.prioridad}</span></div>
-                <p>{item.descripcion}</p>
-                <div className="item-meta"><span>{item.categoria}</span>
-                  <span>ID #{item.id}</span>
-                 {item.aula && <span>Aula: {item.aula}</span>}</div>
-                <div className="item-acciones">
-                  <select aria-label="Cambiar estado" value={item.estado}
-                    onChange={e => actualizarEstado(item.id, e.target.value)}>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_proceso">En proceso</option>
-                    <option value="resuelto">Resuelto</option>
-                  </select>
-                  <button onClick={() => editar(item)}>Editar</button>
-                  <button className="peligro" onClick={() => eliminar(item.id)}>Eliminar</button>
-                </div>
-              </article>
+            {cargando && <p className="vacio">Cargando incidencias…</p>}
+            {!cargando && filtradas.length === 0 && <p className="vacio">No hay incidencias que coincidan.</p>}
+            {filtradas.map((item) => (
+              <TarjetaIncidencia
+                key={item.id}
+                item={item}
+                onEstado={cambiarEstado}
+                onEditar={editar}
+                onEliminar={eliminar}
+                onDetalle={(i) => setDetalleId(i.id)}
+              />
             ))}
           </div>
         </section>
       </div>
+
+      {detalle && (
+        <DetalleIncidencia
+          incidencia={detalle}
+          onCerrar={() => setDetalleId(null)}
+          onCambio={cargar}
+        />
+      )}
+
       <footer>Actividad académica · Uso local · Sin autenticación</footer>
     </main>
   )
