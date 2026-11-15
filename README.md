@@ -1,6 +1,6 @@
 # LabDesk 2.0 — Seguimiento de incidencias (Django REST + React)
 
-Continuación del proyecto LabDesk. Cada incidencia ahora tiene **responsable, ubicación y fecha límite**,
+Continuación del proyecto LabDesk. Cada incidencia tiene **responsable, ubicación y fecha límite**,
 un **historial de comentarios**, **alertas de vencimiento** y un **dashboard** calculado por Django.
 Todo se guarda en SQLite a través de la API.
 
@@ -10,6 +10,7 @@ Todo se guarda en SQLite a través de la API.
 
 - Python 3.10 o superior y pip
 - Node.js 20.19+ o 22.12+ y npm
+- Git
 
 ## Instalación y ejecución
 
@@ -20,7 +21,7 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1          # macOS/Linux: source .venv/bin/activate
 python -m pip install -r requirements.txt
-python manage.py makemigrations       # crea la migración de los campos nuevos y de Comentario
+python manage.py makemigrations
 python manage.py migrate
 python manage.py runserver
 ```
@@ -39,6 +40,17 @@ Web: http://127.0.0.1:5173/
 
 Deja ambas terminales encendidas.
 
+## Datos de prueba
+
+La base de datos (`db.sqlite3`) no se sube al repositorio. Para cargar incidencias de ejemplo
+(con vencidas, próximas a vencer, resueltas y comentarios), con el entorno activo y dentro de `backend`:
+
+```powershell
+python manage.py shell -c "exec(open('seed.py', encoding='utf-8').read())"
+```
+
+Ejecútalo una sola vez, o los datos se duplican. También puedes crear incidencias desde el formulario.
+
 ## Endpoints
 
 | Método | URL | Descripción |
@@ -52,7 +64,7 @@ Deja ambas terminales encendidas.
 | POST | /api/incidencias/{id}/comentarios/ | Agregar comentario (`autor` opcional, `texto` obligatorio) |
 | GET | /api/incidencias/estadisticas/ | Indicadores del dashboard |
 
-Campos nuevos de la incidencia: `responsable` (texto), `ubicacion` (texto), `fecha_limite` (fecha y hora, opcional).
+Campos nuevos de la incidencia: `responsable`, `ubicacion` (texto) y `fecha_limite` (fecha y hora, opcional).
 
 ## Reglas de negocio
 
@@ -70,8 +82,9 @@ backend/incidencias/
   models.py        Incidencia (+ alerta) y Comentario (ForeignKey)
   serializers.py   Validaciones de campos obligatorios
   views.py         CRUD + /comentarios/ + /estadisticas/
+  seed.py          (en backend/) datos de prueba
 frontend/src/
-  api.js           Todas las llamadas a Django y manejo de errores
+  api.js           Llamadas a Django y manejo de errores
   utils.js         Etiquetas, fechas y exportación CSV
   App.jsx          Estado general, filtros y orden
   components/      Dashboard, Formulario, Tarjeta, Detalle con comentarios
@@ -79,13 +92,18 @@ frontend/src/
 
 ## Cómo probar
 
-1. Crea al menos cinco incidencias con distintos estados y prioridades.
-2. Una con fecha límite en el pasado (debe verse **Vencida** en rojo) y otra con fecha dentro de unas horas (**Próxima a vencer**).
+1. Carga los datos de prueba o crea al menos cinco incidencias con distintos estados y prioridades.
+2. Una con fecha límite pasada (se ve **Vencida** en rojo) y otra dentro de unas horas (**Próxima a vencer**).
 3. Cámbiala a **Resuelto**: la alerta desaparece y el dashboard se actualiza.
-4. Abre **Detalle y comentarios**, agrega comentarios y comprueba que se ven con fecha y hora.
+4. Abre **Detalle y comentarios**, agrega comentarios y comprueba que aparecen con fecha y hora.
 5. Recarga con F5: todo permanece (está en SQLite).
-6. Prueba un título vacío: el formulario muestra el error y no envía.
-7. Apaga Django: la página muestra un mensaje de error con botón **Reintentar**.
+6. Guarda con el título vacío: el formulario muestra el error y no envía.
+7. Apaga Django: la página muestra un error con el botón **Reintentar**.
+
+## Evidencias
+
+- Capturas: carpeta `capturas/` (formulario, historial de comentarios, alertas y dashboard).
+- Video de demostración (3 a 5 minutos): ENLACE-DEL-VIDEO
 
 ## Extras incluidos
 
