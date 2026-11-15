@@ -103,21 +103,21 @@ frontend/src/
 
 ### Capturas
 
-**Formulario** (responsable, ubicación y fecha límite)
+**formulario.png** (responsable, ubicación y fecha límite)
 
-![Formulario](capturas/01-formulario.png)
+![formulario.png](capturas/01-formulario.png)
 
-**Historial de comentarios**
+**historial-comentarios.png*
 
-![Historial de comentarios](capturas/02-historial-comentarios.png)
+![historial-comentarios.png](capturas/02-historial-comentarios.png)
 
-**Alertas de vencimiento**
+**03-alertas.png**
 
-![Alertas de vencimiento](capturas/03-alertas.png)
+![03-alertas.png](capturas/03-alertas.png)
 
-**Dashboard**
+**04-dashboard.pngg**
 
-![Dashboard](capturas/04-dashboard.png)
+![04-dashboard.pngg](capturas/04-dashboard.png)
 
 ### Video de demostración (3 a 5 minutos)
 
