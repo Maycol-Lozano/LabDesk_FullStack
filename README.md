@@ -121,7 +121,7 @@ frontend/src/
 
 ### Video de demostración (3 a 5 minutos)
 
-ENLACE-DEL-VIDEO
+[Ver video de demostración en YouTube](https://youtu.be/nl0K6LpZQyA)
 
 ## Extras incluidos
 
